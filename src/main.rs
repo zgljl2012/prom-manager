@@ -72,6 +72,7 @@ fn main() -> std::io::Result<()> {
                 }
             };
             let _ = http::WebServer::new()
+                .bind(server_opts.host, server_opts.port)
                 .route("/hello", greet)
                 .route("/prometheus/hook", prometheus_hook)
                 .run();

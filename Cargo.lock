@@ -645,6 +645,7 @@ dependencies = [
  "env_logger",
  "log",
  "macros",
+ "reqwest",
  "tokio",
 ]
 

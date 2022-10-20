@@ -1,5 +1,6 @@
 use std::{path::Path, fmt::{self, Display}};
 
+use reqwest::Client;
 use tokio::runtime::Runtime;
 
 #[derive(Debug)]
@@ -25,6 +26,7 @@ impl RequestMethod {
 
 pub struct Request<'a> {
     pub rt: &'a Runtime,
+    pub client: &'a Client,
     pub method: RequestMethod,
     pub uri: &'a Path,
     pub http_version: &'a str,
