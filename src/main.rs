@@ -1,7 +1,7 @@
 use actix_web::{get, web::{self, Data}, App, HttpServer, Responder};
 use clap::{arg, Command, ArgMatches};
 use env_logger::{Builder, Target};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 use crate::state::AppState;
 mod prometheus;
@@ -22,6 +22,7 @@ fn cli () -> Command {
         .subcommand(
             Command::new("start")
                .about("Start a node")
+               .arg(arg!(--"wechat-robot" <WECHAT_ROBOT> "Hook URL of the wechat robot"))
                .arg(&port_arg)
                .arg(&host_arg)
         )
@@ -58,13 +59,19 @@ async fn main() -> std::io::Result<()> {
         .init();
     debug!("Starting environment logger");
     let matches = cli().get_matches();
-    let state = Data::new(AppState{
-        wechat_robot: Some("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=d0b8ea9c-bebc-4e71-a85e-d1cd3b1f101e".to_string()),
-    });
     match matches.subcommand() {
         Some(("start", sub_matches)) => {
             let server_opts = get_server_opts(sub_matches);
             info!("Start listen on http://{}:{}", server_opts.host, server_opts.port);
+            let state = Data::new(AppState{
+                wechat_robot: match sub_matches.get_one::<String>("wechat-robot") {
+                    Some(bot) => Some(bot.clone()),
+                    None => {
+                        warn!("You not specified a wechat robot");
+                        None
+                    },
+                },
+            });
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
