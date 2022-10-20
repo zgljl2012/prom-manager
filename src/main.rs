@@ -1,8 +1,11 @@
-use actix_web::{get, web, App, HttpServer, Responder};
+use actix_web::{get, web::{self, Data}, App, HttpServer, Responder};
 use clap::{arg, Command, ArgMatches};
 use env_logger::{Builder, Target};
 use log::{debug, error, info};
+
+use crate::state::AppState;
 mod prometheus;
+mod state;
 
 #[get("/hello/{name}")]
 async fn greet(name: web::Path<String>) -> impl Responder {
@@ -55,12 +58,16 @@ async fn main() -> std::io::Result<()> {
         .init();
     debug!("Starting environment logger");
     let matches = cli().get_matches();
+    let state = Data::new(AppState{
+        wechat_robot: Some("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=d0b8ea9c-bebc-4e71-a85e-d1cd3b1f101e".to_string()),
+    });
     match matches.subcommand() {
         Some(("start", sub_matches)) => {
             let server_opts = get_server_opts(sub_matches);
             info!("Start listen on http://{}:{}", server_opts.host, server_opts.port);
-            HttpServer::new(|| {
+            HttpServer::new(move || {
                 App::new()
+                    .app_data(state.clone())
                     .route("/hello", web::get().to(|| async { "Hello World!" }))
                     .service(prometheus::prometheus_hook)
                     .service(greet)
