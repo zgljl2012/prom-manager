@@ -1,5 +1,7 @@
 use std::{path::Path, fmt::{self, Display}};
 
+use tokio::runtime::Runtime;
+
 #[derive(Debug)]
 pub enum RequestMethod {
     GET,
@@ -22,6 +24,7 @@ impl RequestMethod {
 }
 
 pub struct Request<'a> {
+    pub rt: &'a Runtime,
     pub method: RequestMethod,
     pub uri: &'a Path,
     pub http_version: &'a str,

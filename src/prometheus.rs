@@ -1,13 +1,8 @@
 use std::collections::HashMap;
 
-use actix_web::{post, web::{self, Data}, error, HttpResponse, Error};
-use log::{error as log_error, debug};
+use log::{error as log_error, debug, info};
 use serde::{Serialize, Deserialize};
-use serde_json::json;
-use futures::StreamExt;
-use tokio::task;
-
-use crate::state::AppState;
+use tokio::runtime::Runtime;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(non_snake_case)]
@@ -43,8 +38,6 @@ struct WechatRequest {
     msgtype: String,
     text: WechatText
 }
-
-const MAX_SIZE: usize = 262_144; // max payload size is 256k
 
 /// Generate message
 /// # Examples
@@ -82,57 +75,41 @@ fn generate_message (n: &Notification) -> Option<String> {
     Some(s)
 }
 
-async fn robot_handlers (state: &Data<AppState>, msg: String) {
+fn robot_handlers (rt: &Runtime, msg: String) {
     // Wechat robot handlers
-    match &state.wechat_robot {
-        Some(robot) => {
-            debug!("Send {:?} to {:?}", msg, robot);
-            let robot_url = robot.clone();
-            let _ = task::spawn_blocking(move || {
-                // async fn run(msg: String, robot: String) {
-                //     let wechat_req = WechatRequest {
-                //         msgtype: "text".to_string(),
-                //         text: WechatText { content: msg }
-                //     };
-                //     let serialized = serde_json::to_string(&wechat_req).unwrap();
-                //     let client = reqwest::Client::new();
-                //     let r = client.clone().post(robot).header("Context-Type", "application/json")
-                //         .body(serialized).send().await;
-                //     match r {
-                //         Ok(r) => {
-                //             if r.status() != 200 {
-                //                 log_error!("Send alert to wechat robot hook failed: {:?}", r.text().await.unwrap());
-                //             }
-                //         },
-                //         Err(e) => log_error!("Send alert to wechat failed: {:?}", e)
-                //     };
-                // }
-                // futures::join!(run(msg, robot_url.clone()));
-            }).await;
-        },
-        None => {},
-    }
+    let robot = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=d0b8ea9c-bebc-4e71-a85e-d1cd3b1f101e".to_string();
+    debug!("Send {:?} to {:?}", msg, robot);
+    // let rt = tokio::runtime::Runtime::new().unwrap();
+    // rt.block_on(async {
+    //     info!("Received {:?}", msg);
+    //     let wechat_req = WechatRequest {
+    //         msgtype: "text".to_string(),
+    //         text: WechatText { content: msg }
+    //     };
+    //     let serialized = serde_json::to_string(&wechat_req).unwrap();
+    //     let client = reqwest::Client::new();
+    //     let r = client.clone().post(robot).header("Context-Type", "application/json")
+    //         .body(serialized).send().await;
+    //     match r {
+    //         Ok(r) => {
+    //             if r.status() != 200 {
+    //                 log_error!("Send alert to wechat robot hook failed: {:?}", r.text().await.unwrap());
+    //             }
+    //         },
+    //         Err(e) => log_error!("Send alert to wechat failed: {:?}", e)
+    //     };
+    // });
 }
 
-#[post("/prometheus/hook")]
-pub async fn prometheus_hook(state: Data<AppState>, mut payload: web::Payload) -> Result<HttpResponse, Error> {
+pub fn prometheus_hook(request: http::Request) -> http::Response {
     debug!("Prometheus hook called");
-    let mut body = web::BytesMut::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = chunk?;
-        // limit max size of in-memory payload
-        if (body.len() + chunk.len()) > MAX_SIZE {
-            return Err(error::ErrorBadRequest("overflow"));
-        }
-        body.extend_from_slice(&chunk);
-    }
     // body is loaded, now we can deserialize serde-json
-    let obj = serde_json::from_slice::<Notification>(&body)?;
-    let msg = generate_message(&obj);
-    match msg {
-        Some(msg) => robot_handlers(&state, msg).await,
-        None => {},
-    }
+    // let obj = serde_json::from_str::<Notification>(&request.body.unwrap()).unwrap();
+    // let msg = generate_message(&obj);
+    // match msg {
+    //     Some(msg) => robot_handlers(&request.rt, msg),
+    //     None => {},
+    // }
     // robot handlers
-    Ok(HttpResponse::Ok().json(json!({ "result": true })))
+    http::Response { status: 200, body: "{\"result\": \"ok\"}".to_string()}
 }

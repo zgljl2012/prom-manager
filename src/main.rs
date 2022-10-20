@@ -1,24 +1,11 @@
-use actix_web::{
-    web::{Data},
-};
 use clap::{arg, ArgMatches, Command};
 use env_logger::{Builder, Target};
 use log::{debug, error, info, warn};
 
-use crate::state::AppState;
+use crate::{prometheus::prometheus_hook};
 mod prometheus;
-mod state;
 
-fn greet(req: http::Request) -> http::Response {
-    http::Response {
-        status: 200,
-        body: format!("Hello!"),
-    }
-}
-
-fn hook(req: http::Request) -> http::Response {
-    info!("Hook called");
-    info!("{:?}", req.body);
+fn greet(_: http::Request) -> http::Response {
     http::Response {
         status: 200,
         body: format!("Hello!"),
@@ -77,19 +64,16 @@ fn main() -> std::io::Result<()> {
                 server_opts.host, server_opts.port
             );
             // Create state
-            let state = Data::new(AppState {
-                // sender: sender.clone(),
-                wechat_robot: match sub_matches.get_one::<String>("wechat-robot") {
-                    Some(bot) => Some(bot.clone()),
-                    None => {
-                        warn!("You not specified a wechat robot");
-                        None
-                    }
-                },
-            });
+            let _wechat_robot = match sub_matches.get_one::<String>("wechat-robot") {
+                Some(bot) => Some(bot.clone()),
+                None => {
+                    warn!("You not specified a wechat robot");
+                    None
+                }
+            };
             let _ = http::WebServer::new()
                 .route("/hello", greet)
-                .route("/prometheus/hook", hook)
+                .route("/prometheus/hook", prometheus_hook)
                 .run();
         }
         _ => error!("not implemented"),
