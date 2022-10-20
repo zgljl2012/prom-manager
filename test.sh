@@ -45,5 +45,5 @@ alerts1='{
 }'
 
 
-curl http://127.0.0.1:8080/prometheus/hook -i -X POST -H 'Content-Type: application/json' \
+curl http://127.0.0.1:9094/prometheus/hook -i -X POST -H 'Content-Type: application/json' \
     -d "$alerts1"

@@ -5,6 +5,7 @@ use log::{error as log_error, debug};
 use serde::{Serialize, Deserialize};
 use serde_json::json;
 use futures::StreamExt;
+use tokio::task;
 
 use crate::state::AppState;
 
@@ -86,22 +87,28 @@ async fn robot_handlers (state: &Data<AppState>, msg: String) {
     match &state.wechat_robot {
         Some(robot) => {
             debug!("Send {:?} to {:?}", msg, robot);
-            let wechat_req = WechatRequest {
-                msgtype: "text".to_string(),
-                text: WechatText { content: msg }
-            };
-            let client = reqwest::Client::new();
-            let serialized = serde_json::to_string(&wechat_req).unwrap();
-            let r = client.post(robot).header("Context-Type", "application/json")
-                .body(serialized).send().await;
-            match r {
-                Ok(r) => {
-                    if r.status() != 200 {
-                        log_error!("Send alert to wechat robot hook failed: {:?}", r.text().await.unwrap())
-                    }
-                },
-                Err(e) => log_error!("Send alert to wechat failed: {:?}", e)
-            }
+            let robot_url = robot.clone();
+            let _ = task::spawn_blocking(move || {
+                // async fn run(msg: String, robot: String) {
+                //     let wechat_req = WechatRequest {
+                //         msgtype: "text".to_string(),
+                //         text: WechatText { content: msg }
+                //     };
+                //     let serialized = serde_json::to_string(&wechat_req).unwrap();
+                //     let client = reqwest::Client::new();
+                //     let r = client.clone().post(robot).header("Context-Type", "application/json")
+                //         .body(serialized).send().await;
+                //     match r {
+                //         Ok(r) => {
+                //             if r.status() != 200 {
+                //                 log_error!("Send alert to wechat robot hook failed: {:?}", r.text().await.unwrap());
+                //             }
+                //         },
+                //         Err(e) => log_error!("Send alert to wechat failed: {:?}", e)
+                //     };
+                // }
+                // futures::join!(run(msg, robot_url.clone()));
+            }).await;
         },
         None => {},
     }

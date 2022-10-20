@@ -1,6 +1,7 @@
 use actix_web::{get, web::{self, Data}, App, HttpServer, Responder};
 use clap::{arg, Command, ArgMatches};
 use env_logger::{Builder, Target};
+use futures::channel::mpsc::{self, UnboundedSender};
 use log::{debug, error, info, warn};
 
 use crate::state::AppState;
@@ -9,6 +10,7 @@ mod state;
 
 #[get("/hello/{name}")]
 async fn greet(name: web::Path<String>) -> impl Responder {
+    // let s = state.client.clone();
     format!("Hello {name}!")
 }
 
@@ -61,27 +63,34 @@ async fn main() -> std::io::Result<()> {
     let matches = cli().get_matches();
     match matches.subcommand() {
         Some(("start", sub_matches)) => {
-            let server_opts = get_server_opts(sub_matches);
-            info!("Start listen on http://{}:{}", server_opts.host, server_opts.port);
-            let state = Data::new(AppState{
-                wechat_robot: match sub_matches.get_one::<String>("wechat-robot") {
-                    Some(bot) => Some(bot.clone()),
-                    None => {
-                        warn!("You not specified a wechat robot");
-                        None
+            // Create channel
+            let (sender, receiver) = mpsc::unbounded::<String>();
+            async fn start_web (sub_matches: &ArgMatches, sender: &UnboundedSender<String>) {
+                let server_opts = get_server_opts(sub_matches);
+                info!("Start listen on http://{}:{}", server_opts.host, server_opts.port);
+                // Create state
+                let state = Data::new(AppState{
+                    // sender: sender.clone(),
+                    wechat_robot: match sub_matches.get_one::<String>("wechat-robot") {
+                        Some(bot) => Some(bot.clone()),
+                        None => {
+                            warn!("You not specified a wechat robot");
+                            None
+                        },
                     },
-                },
-            });
-            HttpServer::new(move || {
-                App::new()
-                    .app_data(state.clone())
-                    .route("/hello", web::get().to(|| async { "Hello World!" }))
-                    .service(prometheus::prometheus_hook)
-                    .service(greet)
-            })
-            .bind((server_opts.host, server_opts.port))?
-            .run()
-            .await.unwrap();
+                });
+                HttpServer::new(move || {
+                    App::new()
+                        // .app_data(state.clone())
+                        .route("/hello", web::get().to(|| async { "Hello World!" }))
+                        .service(prometheus::prometheus_hook)
+                        .service(greet)
+                })
+                .bind((server_opts.host, server_opts.port)).unwrap()
+                .run()
+                .await.unwrap();
+            }
+            futures::join!(start_web(&sub_matches, &sender));
         },
         _ => error!("not implemented"),
     };
