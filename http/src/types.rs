@@ -25,6 +25,7 @@ pub struct Request<'a> {
     pub method: RequestMethod,
     pub uri: &'a Path,
     pub http_version: &'a str,
+    pub body: Option<String>
 }
 
 pub struct Response {

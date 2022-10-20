@@ -16,6 +16,15 @@ fn greet(req: http::Request) -> http::Response {
     }
 }
 
+fn hook(req: http::Request) -> http::Response {
+    info!("Hook called");
+    info!("{:?}", req.body);
+    http::Response {
+        status: 200,
+        body: format!("Hello!"),
+    }
+}
+
 fn cli() -> Command {
     let port_arg = arg!(-p - -port <PORT> "Specify a port to listen")
         .value_parser(clap::value_parser!(u16).range(3000..))
@@ -78,7 +87,10 @@ fn main() -> std::io::Result<()> {
                     }
                 },
             });
-            let _ = http::WebServer::new().route("/hello", greet).run();
+            let _ = http::WebServer::new()
+                .route("/hello", greet)
+                .route("/prometheus/hook", hook)
+                .run();
         }
         _ => error!("not implemented"),
     };

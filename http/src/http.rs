@@ -8,7 +8,7 @@ use std::{
 
 use log::{error, info, debug};
 
-use crate::{types::{Request, RequestMethod}, router::{Router, HttpServiceFunc}};
+use crate::{types::{Request, RequestMethod}, router::{Router, HttpServiceFunc}, Response};
 
 pub struct WebServer {
     router: Router,
@@ -21,7 +21,7 @@ impl WebServer {
         }
     }
 
-    pub fn route<'a>(&mut self, name: &'a str, service: HttpServiceFunc) -> &Self {
+    pub fn route<'a>(mut self, name: &'a str, service: HttpServiceFunc) -> Self {
         self.router.register(name, service);
         self
     }
@@ -46,40 +46,41 @@ impl WebServer {
 }
 
 fn handle_connection(router: &Router, mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
-    let mut buffer = [0; 1024];
-
+    const BATCH_SIZE: usize = 1024;
+    let mut buffer = [0; BATCH_SIZE];
     // 将流写入缓存
-    stream.read(&mut buffer).unwrap();
-
-    let request = String::from_utf8_lossy(&buffer[..]);
-    let request_line = request.lines().next().unwrap();
-
-    match parse_request_line(&request_line) {
+    let mut text = String::new();
+    loop {
+        let nsize = stream.read(&mut buffer).unwrap();
+        let s = String::from_utf8(buffer[..nsize].to_vec()).unwrap();
+        text = format!("{}{}", text, s);
+        if nsize < BATCH_SIZE {
+            break;
+        }
+    }
+    let request_line = text;
+    let response = match parse_request_line(&request_line) {
         Ok(request) => {
             info!("Request: {}", &request);
-            let status;
-            let mut body: String = "".to_string();
             match router.get(request.uri.to_str().unwrap()) {
-                Some(service) => {
-                    let res = service(request);
-                    status = res.status;
-                    body = res.body;
-                },
-                None => {
-                    status = 404;
-                }
+                Some(service) => service(request),
+                None => Response {status: 404, body: "".to_string() }
             }
-
-            let response = format!("{}{}",
-                format!("HTTP/1.1 {:?} OK\r\n\r\n", status), 
-                body);
-
-            debug!("Response: {}", &response);
-            stream.write(response.as_bytes()).unwrap();
-            stream.flush().unwrap();
         }
-        Err(err) => error!("Badly formatted request: {}, error: {:?}", &request_line, err),
-    }
+        Err(err) => {
+            Response {
+                status: 400,
+                body: format!("Badly formatted request: {}, error: {:?}", &request_line, err)
+            }
+        },
+    };
+    let response_ = format!("{}{}",
+        format!("HTTP/1.1 {:?} OK\r\n\r\n", response.status), 
+        response.body);
+
+    debug!("Response: {}", &response_);
+    stream.write(response_.as_bytes()).unwrap();
+    stream.flush().unwrap();
 
     Ok(())
 }
@@ -98,24 +99,51 @@ impl<'a> fmt::Display for Request<'a> {
 
 fn parse_request_line(request: &str) -> Result<Request, Box<dyn Error>> {
     let mut parts = request.split_whitespace();
-
-    let method = parts.next().ok_or("Method not specified")?;
+    // Parse the http method
+    let method_s = parts.next().ok_or("Method not specified")?;
     // We only accept GET requests
-    if method != "GET" {
-        Err(format!("Unsupported method: {method}"))?;
+    if method_s != "GET" && method_s != "POST" {
+        Err(format!("Unsupported method: {method_s}"))?;
     }
-
+    // Parse URL
     let uri = Path::new(parts.next().ok_or("URI not specified")?);
     let _ = uri.to_str().expect("Invalid unicode!");
-
+    let method = RequestMethod::from(method_s);
+    // Parse http version
     let http_version = parts.next().ok_or("HTTP version not specified")?;
     if http_version != "HTTP/1.1" && http_version != "HTTP/1.0" {
         Err(format!("Unsupported HTTP version, only support HTTP/1.0 and HTTP/1.1, but got {http_version}"))?;
     }
-
-    Ok(Request {
-        method: RequestMethod::from(method),
-        uri,
-        http_version,
-    })
+    // TODO: Parse headers
+    // Parse request
+    match method {
+        RequestMethod::GET => {
+            Ok(Request {
+                method,
+                uri,
+                http_version,
+                body: None,
+            })
+        },
+        RequestMethod::POST => {
+            // Parse request body
+            let mut lines = request.split_terminator("\r\n");
+            let mut body = String::new();
+            let mut start = false;
+            while let Some(line) = lines.next() {
+                if line == "" {
+                    start = true;
+                }
+                if start {
+                    body = format!("{}{}", body, line);
+                }
+            }
+            Ok(Request {
+                method,
+                uri,
+                http_version,
+                body: Some(body),
+            })
+        }
+    }
 }
