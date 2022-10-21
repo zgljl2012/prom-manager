@@ -2,8 +2,6 @@ use std::collections::HashMap;
 use log::error;
 
 use crate::{Request, Response};
-
-
 pub type HttpServiceFunc = fn(Request) ->  Response;
 
 pub struct Router {

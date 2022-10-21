@@ -1,7 +1,6 @@
 use std::{path::Path, fmt::{self, Display}};
 
-use reqwest::Client;
-use tokio::runtime::Runtime;
+use reqwest::blocking::Client;
 
 #[derive(Debug)]
 pub enum RequestMethod {
@@ -25,7 +24,6 @@ impl RequestMethod {
 }
 
 pub struct Request<'a> {
-    pub rt: &'a Runtime,
     pub client: &'a Client,
     pub method: RequestMethod,
     pub uri: &'a Path,

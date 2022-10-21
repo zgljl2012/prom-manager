@@ -44,6 +44,10 @@ alerts1='{
     "version": "3"
 }'
 
+for i in {1..1}
+do
 
 curl http://127.0.0.1:8080/prometheus/hook -i -X POST -H 'Content-Type: application/json' \
     -d "$alerts1"
+
+done

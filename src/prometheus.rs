@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use log::{error as log_error, debug, info};
-use reqwest::Client;
+use reqwest::blocking::Client;
 use serde::{Serialize, Deserialize};
-use tokio::runtime::Runtime;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(non_snake_case)]
@@ -48,7 +47,7 @@ struct WechatRequest {
 /// let notification = ...
 /// generate_message(&notification)
 /// ```
-/// 
+///
 fn generate_message (n: &Notification) -> Option<String> {
     if n.alerts.len() == 0{
         return None
@@ -76,28 +75,26 @@ fn generate_message (n: &Notification) -> Option<String> {
     Some(s)
 }
 
-fn robot_handlers (rt: &Runtime, client: &Client, msg: String) {
+fn robot_handlers (client: &Client, msg: String) {
     // Wechat robot handlers
     let robot = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=d0b8ea9c-bebc-4e71-a85e-d1cd3b1f101e".to_string();
     debug!("Send {:?} to {:?}", msg, robot);
-    rt.block_on(async {
-        info!("Received {:?}", msg);
-        let wechat_req = WechatRequest {
-            msgtype: "text".to_string(),
-            text: WechatText { content: msg }
-        };
-        let serialized = serde_json::to_string(&wechat_req).unwrap();
-        let r = client.post(robot).header("Context-Type", "application/json")
-            .body(serialized).send().await;
-        match r {
-            Ok(r) => {
-                if r.status() != 200 {
-                    log_error!("Send alert to wechat robot hook failed: {:?}", r.text().await.unwrap());
-                }
-            },
-            Err(e) => log_error!("Send alert to wechat failed: {:?}", e)
-        };
-    });
+    info!("Received {:?}", msg);
+    let wechat_req = WechatRequest {
+        msgtype: "text".to_string(),
+        text: WechatText { content: msg }
+    };
+    let serialized = serde_json::to_string(&wechat_req).unwrap();
+    let r = client.post(robot).header("Context-Type", "application/json")
+        .body(serialized).send();
+    match r {
+        Ok(r) => {
+            if r.status() != 200 {
+                log_error!("Send alert to wechat robot hook failed: {:?}", r.text().unwrap());
+            }
+        },
+        Err(e) => log_error!("Send alert to wechat failed: {:?}", e)
+    };
 }
 
 pub fn prometheus_hook(request: http::Request) -> http::Response {
@@ -106,7 +103,7 @@ pub fn prometheus_hook(request: http::Request) -> http::Response {
     let obj = serde_json::from_str::<Notification>(&request.body.unwrap()).unwrap();
     let msg = generate_message(&obj);
     match msg {
-        Some(msg) => robot_handlers(&request.rt, &request.client, msg),
+        Some(msg) => robot_handlers(&request.client, msg),
         None => {},
     }
     // robot handlers

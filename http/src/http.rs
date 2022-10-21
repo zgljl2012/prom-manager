@@ -7,13 +7,11 @@ use std::{
 };
 
 use log::{error, info, debug};
-use reqwest::Client;
-use tokio::runtime::Runtime;
+use reqwest::blocking::Client;
 
 use crate::{types::{Request, RequestMethod}, router::{Router, HttpServiceFunc}, Response};
 
 pub struct WebServer {
-    rt: Runtime,
     client: Client,
     router: Router,
     host: String,
@@ -25,8 +23,7 @@ impl WebServer {
         Self {
             host: "localhost".to_string(),
             port: 8080,
-            rt: tokio::runtime::Runtime::new().unwrap(),
-            client: reqwest::Client::new(),
+            client: reqwest::blocking::Client::new(),
             router: Router::new(),
         }
     }
@@ -50,7 +47,7 @@ impl WebServer {
 
         for stream in listener.incoming() {
             match stream {
-                Ok(stream) => match handle_connection(&self.rt, &self.client, &self.router, stream) {
+                Ok(stream) => match handle_connection(&self.client, &self.router, stream) {
                     Ok(_) => (),
                     Err(e) => error!("Error handling connection: {}", e),
                 },
@@ -61,7 +58,7 @@ impl WebServer {
     }
 }
 
-fn handle_connection(rt: &Runtime, client: &Client, router: &Router, mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
+fn handle_connection(client: &Client, router: &Router, mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
     const BATCH_SIZE: usize = 1024;
     let mut buffer = [0; BATCH_SIZE];
     // 将流写入缓存
@@ -75,7 +72,7 @@ fn handle_connection(rt: &Runtime, client: &Client, router: &Router, mut stream:
         }
     }
     let request_line = text;
-    let response = match parse_request_line(&rt, &client, &request_line) {
+    let response = match parse_request_line(&client, &request_line) {
         Ok(request) => {
             info!("Request: {}", &request);
             match router.get(request.uri.to_str().unwrap()) {
@@ -113,7 +110,7 @@ impl<'a> fmt::Display for Request<'a> {
     }
 }
 
-fn parse_request_line<'a>(rt: &'a Runtime, client: &'a Client, request: &'a str) -> Result<Request<'a>, Box<dyn Error>> {
+fn parse_request_line<'a>(client: &'a Client, request: &'a str) -> Result<Request<'a>, Box<dyn Error>> {
     let mut parts = request.split_whitespace();
     // Parse the http method
     let method_s = parts.next().ok_or("Method not specified")?;
@@ -135,7 +132,6 @@ fn parse_request_line<'a>(rt: &'a Runtime, client: &'a Client, request: &'a str)
     match method {
         RequestMethod::GET => {
             Ok(Request {
-                rt: &rt,
                 client: &client,
                 method,
                 uri,
@@ -157,7 +153,6 @@ fn parse_request_line<'a>(rt: &'a Runtime, client: &'a Client, request: &'a str)
                 }
             }
             Ok(Request {
-                rt: &rt,
                 client: &client,
                 method,
                 uri,
