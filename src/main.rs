@@ -6,6 +6,7 @@ use log::{debug, error, info, warn};
 use crate::state::AppState;
 mod prometheus;
 mod state;
+mod machine;
 
 #[get("/hello/{name}")]
 async fn greet(name: web::Path<String>) -> impl Responder {
