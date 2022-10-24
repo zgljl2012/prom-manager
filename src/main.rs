@@ -1,11 +1,13 @@
+use std::sync::{Arc, Mutex};
+
 use actix_web::{get, web::{self, Data}, App, HttpServer, Responder};
 use clap::{arg, Command, ArgMatches};
 use env_logger::{Builder, Target};
 use log::{debug, error, info, warn};
 
-use crate::state::AppState;
+use crate::state::{AppState, MachineManager};
 mod prometheus;
-mod state;
+pub mod state;
 mod machine;
 
 #[get("/hello/{name}")]
@@ -65,6 +67,8 @@ async fn main() -> std::io::Result<()> {
             let server_opts = get_server_opts(sub_matches);
             info!("Start listen on http://{}:{}", server_opts.host, server_opts.port);
             let state = Data::new(AppState{
+                machine_manager: Arc::new(Mutex::new(MachineManager::new("./config_machines.json".to_string()))),
+                service_manager: MachineManager::new("./config_services.json".to_string()),
                 wechat_robot: match sub_matches.get_one::<String>("wechat-robot") {
                     Some(bot) => Some(bot.clone()),
                     None => {
@@ -79,6 +83,9 @@ async fn main() -> std::io::Result<()> {
                     .route("/hello", web::get().to(|| async { "Hello World!" }))
                     .service(prometheus::prometheus_hook)
                     .service(greet)
+                    .service(machine::list_machines)
+                    .service(machine::add_machine)
+                    .service(machine::remove_machine)
             })
             .bind((server_opts.host, server_opts.port))?
             .run()

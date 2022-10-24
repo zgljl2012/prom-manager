@@ -1,7 +1,9 @@
-use std::{collections::HashMap, fs, path::Path};
+use std::{collections::HashMap, fs, path::Path, error::Error, sync::{Arc, Mutex}};
 
+use actix_web::{web, error};
 use log::warn;
 use serde::{Serialize, Deserialize};
+use futures::StreamExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Machine {
@@ -9,12 +11,28 @@ pub struct Machine {
     labels: HashMap<String, String>,
 }
 
+const MAX_SIZE: usize = 262_144; // max payload size is 256k
+
 impl Machine {
     pub fn new(target: String, labels: HashMap<String, String>) -> Self {
         Self {
             target,
             labels
         }
+    }
+    pub async fn from_payload(mut payload: web::Payload) -> Result<Self, Box<dyn Error>> {
+        let mut body = web::BytesMut::new();
+        while let Some(chunk) = payload.next().await {
+            let chunk = chunk?;
+            // limit max size of in-memory payload
+            if (body.len() + chunk.len()) > MAX_SIZE {
+                return Err(Box::new(error::ErrorBadRequest("overflow")));
+            }
+            body.extend_from_slice(&chunk);
+        }
+        // body is loaded, now we can deserialize serde-json
+        let obj = serde_json::from_slice::<Machine>(&body)?;
+        Ok(obj)
     }
 }
 
@@ -53,10 +71,8 @@ impl MachineManager {
             machines,
         }
     }
-    fn save(&mut self) {
-        let machines: Vec<Machine> = self.machines.values().cloned().collect();
-        let json = serde_json::to_string(&machines).expect("Should have been able to serialize the hashmap");
-        fs::write(&self.cfg_path, json).expect("Should have been able to write the file");
+    fn save(&self) {
+        fs::write(&self.cfg_path, self.to_json()).expect("Should have been able to write the file");
     }
     pub fn add_machine(&mut self, machine: Machine) {
         self.machines.insert(machine.target.clone(), machine);
@@ -76,10 +92,18 @@ impl MachineManager {
     pub fn size(&self) -> usize {
         self.machines.len()
     }
+    pub fn to_vec(&self) -> Vec<Machine> {
+        self.machines.values().cloned().collect()
+    }
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(&self.to_vec()).expect("Should have been able to serialize the hashmap")
+    }
 }
 
 pub struct AppState {
-    pub wechat_robot: Option<String>
+    pub wechat_robot: Option<String>,
+    pub machine_manager: Arc<Mutex<MachineManager>>,
+    pub service_manager: MachineManager,
 }
 
 #[cfg(test)]

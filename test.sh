@@ -47,3 +47,16 @@ alerts1='{
 
 curl http://127.0.0.1:8080/prometheus/hook -i -X POST -H 'Content-Type: application/json' \
     -d "$alerts1"
+
+function add_machine {
+    curl http://localhost:8080/machine -i -X POST -H 'Content-Type: application/json' \
+        -d '{"target": "test.com", "labels": {"name": "test"}}'
+}
+
+function list_machines {
+    curl http://localhost:8080/machines
+}
+
+function remove_machines {
+    curl http://localhost:8080/machine/test.com -X DELETE
+}
