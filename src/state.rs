@@ -7,16 +7,16 @@ use futures::StreamExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Machine {
-    target: String,
+    targets: Vec<String>,
     labels: HashMap<String, String>,
 }
 
 const MAX_SIZE: usize = 262_144; // max payload size is 256k
 
 impl Machine {
-    pub fn new(target: String, labels: HashMap<String, String>) -> Self {
+    pub fn new(targets: Vec<String>, labels: HashMap<String, String>) -> Self {
         Self {
-            target,
+            targets,
             labels
         }
     }
@@ -39,10 +39,10 @@ impl Machine {
 #[derive(Debug, Clone)]
 pub struct MachineManager {
     cfg_path: String,
-    machines: HashMap<String, Machine>
+    machines: Vec<Machine>
 }
 
-fn load(cfg_path: String) -> HashMap<String, Machine> {
+fn load(cfg_path: String) -> Vec<Machine> {
     let mut contents = "[]".to_string();
     if !Path::new(&cfg_path).exists() {
         warn!("{} does not exist", cfg_path)
@@ -53,11 +53,7 @@ fn load(cfg_path: String) -> HashMap<String, Machine> {
     let machines = serde_json::from_str::<Vec<Machine>>(&contents);
     match machines {
         Ok(machines) => {
-            let mut results: HashMap<String, Machine> = HashMap::new();
-            for m in &machines {
-                results.insert(m.target.clone(), m.clone());
-            }
-            results
+            machines
         },
         Err(err) => panic!("Load failed: {:?}", err)
     }
@@ -75,25 +71,25 @@ impl MachineManager {
         fs::write(&self.cfg_path, self.to_json()).expect("Should have been able to write the file");
     }
     pub fn add_machine(&mut self, machine: Machine) {
-        self.machines.insert(machine.target.clone(), machine);
+        self.machines.push(machine);
         self.save();
     }
-    pub fn remove_machine(&mut self, machine: &String) {
-        self.machines.remove(machine);
+    pub fn remove_machine(&mut self, id: usize) {
+        self.machines.remove(id);
         self.save();
     }
-    pub fn get_machine(&mut self, machine: &String) -> Option<&Machine> {
-        let m = self.machines.get(machine);
+    pub fn get_machine(&mut self, id: usize) -> Option<&Machine> {
+        let m = self.machines.get(id);
         return m.clone()
     }
-    pub fn get_matches(&mut self) -> HashMap<String, Machine> {
+    pub fn get_matches(&mut self) -> Vec<Machine> {
         self.machines.clone()
     }
     pub fn size(&self) -> usize {
         self.machines.len()
     }
     pub fn to_vec(&self) -> Vec<Machine> {
-        self.machines.values().cloned().collect()
+        self.machines.clone()
     }
     pub fn to_json(&self) -> String {
         serde_json::to_string(&self.to_vec()).expect("Should have been able to serialize the hashmap")
@@ -117,13 +113,13 @@ mod tests {
         let mut m = MachineManager::new("./config_machines.json".to_string());
         let mut labels = HashMap::new();
         labels.insert("name".to_string(), "test".to_string());
-        m.add_machine(Machine::new("target".to_string(), labels));
+        m.add_machine(Machine::new(vec!("target".to_string()), labels));
         assert_eq!(m.size(), 1);
-        let got = m.get_machine(&"target".to_string());
+        let got = m.get_machine(0);
         assert_eq!(got.is_some(), true);
-        m.remove_machine(&"target1".to_string());
+        m.remove_machine(2);
         assert_eq!(m.size(), 1);
-        m.remove_machine(&"target".to_string());
+        m.remove_machine(0);
         assert_eq!(m.size(), 0);
     }
 }

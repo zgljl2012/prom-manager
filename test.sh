@@ -50,7 +50,7 @@ curl http://127.0.0.1:8080/prometheus/hook -i -X POST -H 'Content-Type: applicat
 
 function add_machine {
     curl http://localhost:8080/machine -i -X POST -H 'Content-Type: application/json' \
-        -d '{"target": "test.com", "labels": {"name": "test"}}'
+        -d '{"targets": ["test.com"], "labels": {"name": "test"}}'
 }
 
 function list_machines {
@@ -58,12 +58,12 @@ function list_machines {
 }
 
 function remove_machines {
-    curl http://localhost:8080/machine/test.com -X DELETE
+    curl http://localhost:8080/machine/0 -X DELETE
 }
 
 function add_service {
     curl http://localhost:8080/service -i -X POST -H 'Content-Type: application/json' \
-        -d '{"target": "service.com", "labels": {"name": "test"}}'
+        -d '{"targets": ["service.com"], "labels": {"name": "test"}}'
 }
 
 function list_services {

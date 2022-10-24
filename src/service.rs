@@ -29,7 +29,7 @@ pub async fn list_services(state: Data<AppState>) -> impl Responder {
 }
 
 #[delete("/service/{target}")]
-pub async fn remove_service(state: Data<AppState>, target: web::Path<String>) -> impl Responder {
-    state.service_manager.lock().unwrap().remove_machine(&target.to_string());
+pub async fn remove_service(state: Data<AppState>, target: web::Path<usize>) -> impl Responder {
+    state.service_manager.lock().unwrap().remove_machine(target.to_be());
     HttpResponse::Ok().json(json!({"result": true}))
 }

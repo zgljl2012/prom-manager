@@ -29,7 +29,7 @@ pub async fn list_machines(state: Data<AppState>) -> impl Responder {
 }
 
 #[delete("/machine/{target}")]
-pub async fn remove_machine(state: Data<AppState>, target: web::Path<String>) -> impl Responder {
-    state.machine_manager.lock().unwrap().remove_machine(&target.to_string());
+pub async fn remove_machine(state: Data<AppState>, target: web::Path<usize>) -> impl Responder {
+    state.machine_manager.lock().unwrap().remove_machine(target.to_be());
     HttpResponse::Ok().json(json!({"result": true}))
 }
