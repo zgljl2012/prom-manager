@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, path::Path, fs};
 
 use actix_web::{get, web::{self, Data}, App, HttpServer, Responder};
 use clap::{arg, Command, ArgMatches};
@@ -9,6 +9,7 @@ use crate::state::{AppState, MachineManager};
 mod prometheus;
 pub mod state;
 mod machine;
+mod service;
 
 #[get("/hello/{name}")]
 async fn greet(name: web::Path<String>) -> impl Responder {
@@ -26,6 +27,7 @@ fn cli () -> Command {
             Command::new("start")
                .about("Start a node")
                .arg(arg!(--"wechat-robot" <WECHAT_ROBOT> "Hook URL of the wechat robot"))
+               .arg(arg!(--"prom-dir" <PROM_DIR> "Directory containing config_machines.json and config_services.json"))
                .arg(&port_arg)
                .arg(&host_arg)
         )
@@ -66,9 +68,25 @@ async fn main() -> std::io::Result<()> {
         Some(("start", sub_matches)) => {
             let server_opts = get_server_opts(sub_matches);
             info!("Start listen on http://{}:{}", server_opts.host, server_opts.port);
+            let prom_dir = match sub_matches.get_one::<String>("prom-dir") {
+                Some(s) => {
+                    let p = Path::new(s);
+                    if !p.exists() {
+                        fs::create_dir_all(p)?;
+                    } else {
+                        if !p.is_dir() {
+                            panic!("{} is not a directory", p.to_str().unwrap());
+                        }
+                    }
+                    s.clone()
+                },
+                None => "./".to_string(),
+            };
+            let config_machines = Path::new(&prom_dir).join("config_machines.json").to_str().unwrap().to_string();
+            let config_services = Path::new(&prom_dir).join("config_services.json").to_str().unwrap().to_string();
             let state = Data::new(AppState{
-                machine_manager: Arc::new(Mutex::new(MachineManager::new("./config_machines.json".to_string()))),
-                service_manager: MachineManager::new("./config_services.json".to_string()),
+                machine_manager: Arc::new(Mutex::new(MachineManager::new(config_machines))),
+                service_manager: Arc::new(Mutex::new(MachineManager::new(config_services))),
                 wechat_robot: match sub_matches.get_one::<String>("wechat-robot") {
                     Some(bot) => Some(bot.clone()),
                     None => {
@@ -86,6 +104,9 @@ async fn main() -> std::io::Result<()> {
                     .service(machine::list_machines)
                     .service(machine::add_machine)
                     .service(machine::remove_machine)
+                    .service(service::add_service)
+                    .service(service::remove_service)
+                    .service(service::list_services)
             })
             .bind((server_opts.host, server_opts.port))?
             .run()

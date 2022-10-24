@@ -60,3 +60,16 @@ function list_machines {
 function remove_machines {
     curl http://localhost:8080/machine/test.com -X DELETE
 }
+
+function add_service {
+    curl http://localhost:8080/service -i -X POST -H 'Content-Type: application/json' \
+        -d '{"target": "service.com", "labels": {"name": "test"}}'
+}
+
+function list_services {
+    curl http://localhost:8080/services
+}
+
+function remove_service {
+    curl http://localhost:8080/service/service.com -X DELETE
+}

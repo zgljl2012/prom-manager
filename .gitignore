@@ -2,4 +2,6 @@
 Cargo.lock
 
 # tmp files
+prom
 config_machines.json
+config_services.json

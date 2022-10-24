@@ -103,7 +103,7 @@ impl MachineManager {
 pub struct AppState {
     pub wechat_robot: Option<String>,
     pub machine_manager: Arc<Mutex<MachineManager>>,
-    pub service_manager: MachineManager,
+    pub service_manager: Arc<Mutex<MachineManager>>,
 }
 
 #[cfg(test)]
