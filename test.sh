@@ -10,6 +10,7 @@ alerts1='{
             "labels": {
                 "alertname": "something_happend",
                 "env": "prod",
+                "name": "local-node",
                 "instance": "server01.int:9100",
                 "job": "node",
                 "service": "prometheus_bot",

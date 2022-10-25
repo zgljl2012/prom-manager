@@ -64,13 +64,16 @@ fn generate_message (n: &Notification) -> Option<String> {
     let default_instance = "Unknown instance".to_string();
     let default_severity = "Unknown severity".to_string();
     let default_summary = "Empty summary".to_string();
+    let default_description = "Empty description".to_string();
     while i < n.alerts.len() {
         let alert = &n.alerts[i];
-        let service = alert.labels.get("service").unwrap_or(&default_service);
+        let service = alert.labels.get("name").unwrap_or(&default_service);
         let instance = alert.labels.get("instance").unwrap_or(&default_instance);
         let severity = alert.labels.get("severity").unwrap_or(&default_severity);
         let summary = alert.annotations.get("summary").unwrap_or(&default_summary);
-        let alert_msg= format!("Services: {:?}\nInstance: {:?}\nSeverity: {:?}\n----------\n{:?}\n", service, instance, severity, summary);
+        let description = alert.annotations.get("description").unwrap_or(&default_description);
+        let alert_msg= format!("Services: {:?}\nInstance: {:?}\nSeverity: {:?}\n\n----------\nSummary: {:?}\nDescription: {:?}",
+            service, instance, severity, summary, description);
         if s.len() == 0 {
             s = alert_msg;
         } else {
@@ -119,6 +122,8 @@ pub async fn prometheus_hook(state: Data<AppState>, mut payload: web::Payload) -
         }
         body.extend_from_slice(&chunk);
     }
+    // let a = body.clone().freeze();
+    debug!("{:?}", std::str::from_utf8(&body));
     // body is loaded, now we can deserialize serde-json
     let obj = serde_json::from_slice::<Notification>(&body)?;
     let msg = generate_message(&obj);
